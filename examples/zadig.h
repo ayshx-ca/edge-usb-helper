@@ -1,6 +1,7 @@
 /*
  * Zadig: Automated Driver Installer for USB devices (GUI version)
  * Copyright (c) 2010-2025 Pete Batard <pete@akeo.ie>
+ * EDGE branding (c) EDGE / Ayshx — derivative, not a replacement of the original copyright.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
