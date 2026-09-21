@@ -17,7 +17,7 @@ env:
 
 jobs:
   release:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
       - name: Build Zadig (Release Win32)
         shell: cmd
         run: |
-          msbuild ${{ env.SOLUTION_FILE_PATH }} /m /p:Configuration=Release,Platform=Win32,BuildMacros=${{ env.BUILD_MACROS }}
+          msbuild ${{ env.SOLUTION_FILE_PATH }} /m /p:Configuration=Release,Platform=Win32,PlatformToolset=v143,BuildMacros=${{ env.BUILD_MACROS }}
 
       - name: Package EDGE USB Helper
         shell: bash
