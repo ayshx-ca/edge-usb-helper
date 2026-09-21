@@ -1,3 +1,38 @@
+EDGE USB Helper
+===============
+
+Branded Windows installer for EDGE POS tills. It is a GPLv3 derivative of
+**[Zadig](https://zadig.akeo.ie/)** by Pete Batard (libwdi examples).
+
+Use it when Chrome shows **Access denied** on a USB thermal printer: run as
+Administrator, pick **GLPrinter80**, set the driver to **WinUSB**, and install.
+
+### License (required)
+
+- The Zadig GUI is **GNU GPL v3 or later**. Copyright © 2010–2025 Pete Batard.
+- The libwdi library is **GNU LGPL v3 or later**.
+- You must keep those notices. Source for this fork:
+  https://github.com/ayshx-ca/edge-usb-helper
+- Official upstream: https://github.com/pbatard/libwdi
+
+### Install (until an EDGE-signed build is published)
+
+Download the official Zadig build from
+https://github.com/pbatard/libwdi/releases
+or https://zadig.akeo.ie/ — it is the same tool. A Windows machine with
+Visual Studio can compile this tree (`examples/zadig`) to produce an EDGE-named
+executable.
+
+### Till instructions
+
+1. Download and run as Administrator.
+2. Options → List All Devices.
+3. Select the thermal printer (GLPrinter80), not a Qualcomm adapter.
+4. Target driver: **WinUSB**.
+5. Install Driver, then reconnect the printer in EDGE.
+
+---
+
 libwdi: A Windows Driver Installation library for USB devices
 =============================================================
 
