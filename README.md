@@ -15,13 +15,15 @@ Administrator, pick **GLPrinter80**, set the driver to **WinUSB**, and install.
   https://github.com/ayshx-ca/edge-usb-helper
 - Official upstream: https://github.com/pbatard/libwdi
 
-### Install (until an EDGE-signed build is published)
+### Download
 
-Download the official Zadig build from
-https://github.com/pbatard/libwdi/releases
-or https://zadig.akeo.ie/ — it is the same tool. A Windows machine with
-Visual Studio can compile this tree (`examples/zadig`) to produce an EDGE-named
-executable.
+[EDGE-USB-Helper.exe](https://github.com/ayshx-ca/edge-usb-helper/releases/latest/download/EDGE-USB-Helper.exe)
+
+GitHub Actions builds that file from this source on every `master` push. It is
+**not code-signed**, so Windows SmartScreen may warn — use More info → Run anyway.
+
+The same installer is still available from Pete Batard as
+[Zadig](https://zadig.akeo.ie/).
 
 ### Till instructions
 
