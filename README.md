@@ -28,10 +28,10 @@ The same installer is still available from Pete Batard as
 ### Till instructions
 
 1. Download and run as Administrator.
-2. Options → List All Devices.
-3. Select the thermal printer (GLPrinter80), not a Qualcomm adapter.
-4. Target driver: **WinUSB**.
-5. Install Driver, then reconnect the printer in EDGE.
+2. Wait for **Scanning for printers…**, then pick the till printer (for example GLPrinter80).
+3. Click **Confirm and install**. That switches the device to WinUSB.
+4. Reconnect the printer in EDGE.
+5. Use **Advanced options** only if the printer is missing from the list.
 
 ---
 

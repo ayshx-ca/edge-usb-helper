@@ -55,6 +55,8 @@
 void toggle_driverless(BOOL refresh);
 void set_install_button(void);
 BOOL parse_ini(void);
+INT_PTR CALLBACK wizard_callback(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+HWND ui_parent(void);
 
 /*
  * Globals
@@ -63,6 +65,8 @@ OPENED_LIBRARIES_VARS;
 HINSTANCE main_instance;
 HWND hDeviceList;
 HWND hMainDialog;
+HWND hWizardDialog = NULL;
+static BOOL wizard_scan_ready = FALSE;
 HWND hInfo;
 HWND hStatus;
 HWND hVIDToolTip = NULL, hArrowToolTip = NULL;
@@ -370,7 +374,7 @@ int install_driver(void)
 
 	// Perform extraction/installation
 	if (id_options.install_filter_driver) {
-		if ((!has_filter_driver) && (MessageBoxA(hMainDialog, "WARNING:\n"
+		if ((!has_filter_driver) && (MessageBoxA(ui_parent(), "WARNING:\n"
 			"Improper use of the filter driver can cause devices to malfunction\n"
 			"and, in some cases, complete system failure.\n\n"
 			"THE AUTHOR(S) OF THIS SOFTWARE ACCEPT NO LIABILITY FOR\n"
@@ -386,13 +390,13 @@ int install_driver(void)
 		// Perform the install if not extracting the files only
 		if ((pd_options.driver_type != WDI_USER) && (!extract_only)) {
 			if ( (get_driver_type(dev) == DT_SYSTEM)
-			  && (MessageBoxA(hMainDialog, "You are about to modify a system driver.\n"
+			  && (MessageBoxA(ui_parent(), "You are about to modify a system driver.\n"
 					"Are you sure this is what you want?", "Warning - System Driver",
 					MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) == IDNO) ) {
 				r = WDI_ERROR_USER_CANCEL; goto out;
 			}
 			dsprintf("Installing driver. Please wait...");
-			id_options.hWnd = hMainDialog;
+			id_options.hWnd = ui_parent();
 			r = wdi_install_driver(dev, szFolderPath, inf_name, &id_options);
 			// Switch to non driverless-only mode and set hw ID to show the newly installed device
 			current_device_hardware_id = (dev != NULL)?safe_strdup(dev->hardware_id):NULL;
@@ -1154,6 +1158,7 @@ void init_dialog(HWND hDlg)
 
 	// Set the title bar icon
 	set_title_bar_icon(hDlg);
+	SetWindowTextU(hDlg, APPLICATION_NAME);
 
 	// Count of Microsoft for making it more attractive to read a
 	// version using strtok() than using GetFileVersionInfo()
@@ -1575,7 +1580,7 @@ INT_PTR CALLBACK main_callback(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		return (INT_PTR)TRUE;
 
 	case UM_NO_UPDATE:
-		notification(MSG_INFO, NULL, "Update check", "No new version of Zadig was found");
+		notification(MSG_INFO, NULL, "Update check", "No new version of EDGE USB Helper was found");
 		break;
 
 	case WM_INITDIALOG:
@@ -1650,6 +1655,9 @@ INT_PTR CALLBACK main_callback(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		} else {
 			dprintf("%d device%s found.", nb_devices+1, (nb_devices!=0)?"s":"");
 			from_install = FALSE;
+		}
+		if ((hWizardDialog != NULL) && IsWindowVisible(hWizardDialog) && wizard_scan_ready) {
+			PostMessage(hWizardDialog, UM_SCAN_PRINTERS, 1, 0);
 		}
 		return (INT_PTR)TRUE;
 
@@ -2000,6 +2008,10 @@ INT_PTR CALLBACK main_callback(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		return (INT_PTR)TRUE;
 
 	case WM_CLOSE:
+		if (hWizardDialog != NULL) {
+			DestroyWindow(hWizardDialog);
+			hWizardDialog = NULL;
+		}
 		PostQuitMessage(0);
 		destroy_all_tooltips();
 		break;
@@ -2007,6 +2019,316 @@ INT_PTR CALLBACK main_callback(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 	default:
 		return (INT_PTR)FALSE;
 
+	}
+	return (INT_PTR)FALSE;
+}
+
+HWND ui_parent(void)
+{
+	if ((hWizardDialog != NULL) && IsWindowVisible(hWizardDialog))
+		return hWizardDialog;
+	return hMainDialog;
+}
+
+#define ListBox_AddStringU(hCtrl, str) ((int)(DWORD)SendMessageLU(hCtrl, LB_ADDSTRING, (WPARAM)0, str))
+
+static const char* stristr(const char* hay, const char* needle)
+{
+	size_t n;
+
+	if ((hay == NULL) || (needle == NULL) || (needle[0] == 0))
+		return hay;
+	n = strlen(needle);
+	for (; *hay; hay++) {
+		if (_strnicmp(hay, needle, n) == 0)
+			return hay;
+	}
+	return NULL;
+}
+
+static BOOL text_has_any(const char* text, const char* const* needles)
+{
+	int i;
+
+	if (text == NULL)
+		return FALSE;
+	for (i = 0; needles[i] != NULL; i++) {
+		if (stristr(text, needles[i]) != NULL)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static BOOL is_ignored_usb_device(struct wdi_device_info* dev)
+{
+	static const unsigned short reject_vid[] = {
+		0x05C6, /* Qualcomm */
+		0x18D1, /* Google / ADB */
+		0x05AC, /* Apple */
+		0x067B, /* Prolific */
+		0x1A86, /* WCH CH340 */
+		0x0403, /* FTDI */
+		0x10C4, /* Silicon Labs CP210x */
+	};
+	static const char* reject_name[] = {
+		"Qualcomm", "QDSS", "ADB Interface", "Fastboot", "iPhone", "iPad",
+		"Apple", "Camera", "Prolific", "USB-SERIAL", "USB Serial", "CH340",
+		"FTDI", "Bluetooth", "Root Hub", "Hub", "Keyboard", "Mouse",
+		"Headset", "Webcam", "Realtek", "Intel(R)", NULL
+	};
+	int i;
+
+	if (dev == NULL)
+		return TRUE;
+	for (i = 0; i < ARRAYSIZE(reject_vid); i++) {
+		if (dev->vid == reject_vid[i])
+			return TRUE;
+	}
+	return text_has_any(dev->desc, reject_name);
+}
+
+static BOOL is_known_printer(struct wdi_device_info* dev)
+{
+	static const char* printer_name[] = {
+		"GLPrinter", "GL-Printer", "Printer80", "Printer 80", "POS-80", "POS80",
+		"POS-58", "POS58", "POS-8360", "POS8360", "TM-T", "TM-m", "TM-U",
+		"Receipt", "Thermal", "Xprinter", "XP-80", "XP-58", "Rongta", "RP80",
+		"RP58", "Gprinter", "GP-58", "GP-80", "Citizen CT", "TSP100", "TSP650",
+		"Bixolon", "SRP-", "SNBC", "Zijiang", "HOIN", "MUNBYN", "GOOJPRT",
+		"JALPOS", "Phomemo", "ESC/POS", "80mm", "58mm",
+		"USB Printing Support", "POS Printer", "Receipt Printer", NULL
+	};
+	static const unsigned short printer_vid[] = {
+		0x0416, 0x04B8, 0x0519, 0x0DD4, 0x0FE6, 0x1504, 0x154F, 0x2730, 0x6868
+	};
+	char blob[512];
+	int i;
+
+	if (dev == NULL)
+		return FALSE;
+
+	if ((dev->driver != NULL) && (stristr(dev->driver, "usbprint") != NULL))
+		return TRUE;
+
+	static_sprintf(blob, "%s %s %s",
+		(dev->compatible_id != NULL) ? dev->compatible_id : "",
+		(dev->hardware_id != NULL) ? dev->hardware_id : "",
+		(dev->device_id != NULL) ? dev->device_id : "");
+	if ((stristr(blob, "USBPRINT") != NULL) || (stristr(blob, "Class_07") != NULL))
+		return TRUE;
+
+	if (is_ignored_usb_device(dev))
+		return FALSE;
+
+	if (text_has_any(dev->desc, printer_name))
+		return TRUE;
+
+	for (i = 0; i < ARRAYSIZE(printer_vid); i++) {
+		if (dev->vid == printer_vid[i])
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static void show_advanced_ui(void)
+{
+	if ((hWizardDialog != NULL) && IsWindowVisible(hWizardDialog))
+		ShowWindow(hWizardDialog, SW_HIDE);
+	if (!cl_options.list_all)
+		toggle_driverless(FALSE);
+	if (!advanced_mode) {
+		CheckMenuItem(hMenuOptions, IDM_ADVANCEDMODE, MF_UNCHECKED);
+		toggle_advanced();
+	}
+	ShowWindow(hMainDialog, SW_SHOWNORMAL);
+	SetForegroundWindow(hMainDialog);
+}
+
+static void format_printer_line(struct wdi_device_info* dev, char* out, size_t out_size)
+{
+	const char* driver;
+
+	driver = (dev->driver != NULL && dev->driver[0] != 0) ? dev->driver : "no driver";
+	safe_sprintf(out, out_size, "%s    %04X:%04X    %s",
+		(dev->desc != NULL) ? dev->desc : "USB printer",
+		dev->vid, dev->pid, driver);
+}
+
+static int fill_printer_list(HWND hDlg)
+{
+	struct wdi_device_info* dev;
+	HWND hList;
+	char line[STR_BUFFER_SIZE];
+	int count = 0, index;
+
+	hList = GetDlgItem(hDlg, IDC_PRINTER_LIST);
+	SendMessage(hList, LB_RESETCONTENT, 0, 0);
+
+	for (dev = list; dev != NULL; dev = dev->next) {
+		if (!is_known_printer(dev))
+			continue;
+		format_printer_line(dev, line, sizeof(line));
+		index = ListBox_AddStringU(hList, line);
+		if ((index != LB_ERR) && (index != LB_ERRSPACE)) {
+			SendMessage(hList, LB_SETITEMDATA, (WPARAM)index, (LPARAM)dev);
+			count++;
+		}
+	}
+
+	if (count > 0) {
+		SendMessage(hList, LB_SETCURSEL, 0, 0);
+		EnableWindow(GetDlgItem(hDlg, IDC_CONFIRM_INSTALL), TRUE);
+		SetDlgItemTextA(hDlg, IDC_SCAN_STATUS,
+			(count == 1) ? "Found 1 printer. Select it and confirm." :
+			"Found printers. Select one and confirm.");
+	} else {
+		EnableWindow(GetDlgItem(hDlg, IDC_CONFIRM_INSTALL), FALSE);
+		SetDlgItemTextA(hDlg, IDC_SCAN_STATUS,
+			"No known printers found. Plug in the till printer and scan again, or open Advanced options.");
+	}
+	return count;
+}
+
+static void scan_known_printers(HWND hDlg, BOOL reuse_list)
+{
+	HWND hProgress;
+	int r;
+
+	hProgress = GetDlgItem(hDlg, IDC_SCAN_PROGRESS);
+	SetDlgItemTextA(hDlg, IDC_SCAN_STATUS, "Scanning for printers...");
+	ShowWindow(hProgress, SW_SHOW);
+	SendMessage(hProgress, PBM_SETMARQUEE, TRUE, 30);
+	EnableWindow(GetDlgItem(hDlg, IDC_CONFIRM_INSTALL), FALSE);
+	EnableWindow(GetDlgItem(hDlg, IDC_RESCAN), FALSE);
+	UpdateWindow(hDlg);
+
+	cl_options.list_all = TRUE;
+	CheckMenuItem(hMenuOptions, IDM_LISTALL, MF_CHECKED);
+	EnableMenuItem(hMenuOptions, IDM_IGNOREHUBS, MF_ENABLED);
+
+	if (!reuse_list) {
+		if (list != NULL)
+			wdi_destroy_list(list);
+		list = NULL;
+		device = NULL;
+		r = wdi_create_list(&list, &cl_options);
+		if (r == WDI_SUCCESS)
+			nb_devices = display_devices();
+		else
+			nb_devices = -1;
+	}
+
+	fill_printer_list(hDlg);
+	SendMessage(hProgress, PBM_SETMARQUEE, FALSE, 0);
+	ShowWindow(hProgress, SW_HIDE);
+	EnableWindow(GetDlgItem(hDlg, IDC_RESCAN), TRUE);
+	wizard_scan_ready = TRUE;
+}
+
+static void confirm_selected_printer(HWND hDlg)
+{
+	struct wdi_device_info* selected;
+	HWND hList;
+	int index, combo, r, count;
+
+	hList = GetDlgItem(hDlg, IDC_PRINTER_LIST);
+	index = (int)SendMessage(hList, LB_GETCURSEL, 0, 0);
+	if (index < 0) {
+		notification(MSG_INFO, NULL, "Select a printer",
+			"Select a printer in the list, then confirm.");
+		return;
+	}
+	selected = (struct wdi_device_info*)SendMessage(hList, LB_GETITEMDATA, (WPARAM)index, 0);
+	if ((selected == NULL) || (selected == (struct wdi_device_info*)LB_ERR)) {
+		notification(MSG_ERROR, NULL, "Printer", "Could not read the selected printer.");
+		return;
+	}
+
+	device = selected;
+	current_device_index = 0;
+	count = ComboBox_GetCount(hDeviceList);
+	for (combo = 0; combo < count; combo++) {
+		if ((struct wdi_device_info*)ComboBox_GetItemData(hDeviceList, combo) == selected) {
+			current_device_index = combo;
+			_IGNORE(ComboBox_SetCurSel(hDeviceList, combo));
+			PostMessage(hMainDialog, WM_COMMAND, MAKELONG(IDC_DEVICELIST, CBN_SELCHANGE),
+				(LPARAM)hDeviceList);
+			break;
+		}
+	}
+
+	pd_options.driver_type = WDI_WINUSB;
+	pd_options.use_wcid_driver = FALSE;
+	extract_only = FALSE;
+	id_options.install_filter_driver = FALSE;
+	set_driver();
+
+	r = install_driver();
+	if (r == WDI_SUCCESS) {
+		notification(MSG_INFO, NULL, "Driver Installation",
+			"WinUSB is installed. Reconnect the printer in EDGE.");
+		if (exit_on_success)
+			PostMessage(hMainDialog, WM_CLOSE, 0, 0);
+	} else if (r == WDI_ERROR_USER_CANCEL) {
+		notification(MSG_WARNING, NULL, "Driver Installation",
+			"Driver installation cancelled.");
+	} else {
+		notification(MSG_ERROR, NULL, "Driver Installation",
+			"The driver installation failed. Try Advanced options or another printer.");
+	}
+}
+
+INT_PTR CALLBACK wizard_callback(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	(void)lParam;
+
+	switch (message) {
+	case WM_INITDIALOG:
+		set_title_bar_icon(hDlg);
+		SetWindowTextU(hDlg, APPLICATION_NAME);
+		EnableWindow(GetDlgItem(hDlg, IDC_CONFIRM_INSTALL), FALSE);
+		SetTimer(hDlg, 1, 80, NULL);
+		return (INT_PTR)TRUE;
+
+	case WM_TIMER:
+		KillTimer(hDlg, 1);
+		scan_known_printers(hDlg, FALSE);
+		return (INT_PTR)TRUE;
+
+	case UM_SCAN_PRINTERS:
+		scan_known_printers(hDlg, wParam != 0);
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+		switch (LOWORD(wParam)) {
+		case IDC_RESCAN:
+			scan_known_printers(hDlg, FALSE);
+			return (INT_PTR)TRUE;
+		case IDC_SHOW_ADVANCED:
+			show_advanced_ui();
+			return (INT_PTR)TRUE;
+		case IDC_CONFIRM_INSTALL:
+			confirm_selected_printer(hDlg);
+			return (INT_PTR)TRUE;
+		case IDC_PRINTER_LIST:
+			if (HIWORD(wParam) == LBN_DBLCLK) {
+				confirm_selected_printer(hDlg);
+				return (INT_PTR)TRUE;
+			}
+			break;
+		case IDCANCEL:
+			PostMessage(hDlg, WM_CLOSE, 0, 0);
+			return (INT_PTR)TRUE;
+		}
+		break;
+
+	case WM_CLOSE:
+		DestroyWindow(hDlg);
+		if (hWizardDialog == hDlg)
+			hWizardDialog = NULL;
+		if ((hMainDialog == NULL) || !IsWindowVisible(hMainDialog))
+			PostQuitMessage(0);
+		return (INT_PTR)TRUE;
 	}
 	return (INT_PTR)FALSE;
 }
@@ -2051,7 +2373,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		mutex = CreateMutexA(NULL, TRUE, "Global/" APPLICATION_NAME);
 	}
 	if ((mutex == NULL) || (GetLastError() == ERROR_ALREADY_EXISTS)) {
-		MessageBoxA(NULL, "Another Zadig application is running.\n"
+		MessageBoxA(NULL, "Another EDGE USB Helper is already running.\n"
 			"Please close the first application before running another one.",
 			"Other instance detected", MB_ICONSTOP);
 		safe_closehandle(mutex);
@@ -2063,7 +2385,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	// Alert users if they are running versions older than Windows 7
 	if (windows_version < WINDOWS_7) {
-		MessageBoxA(NULL, "This version of Zadig can only be run on Windows 7 or later",
+		MessageBoxA(NULL, "EDGE USB Helper can only be run on Windows 7 or later",
 			"Incompatible version", MB_ICONSTOP);
 		CloseHandle(mutex);
 		return 0;
@@ -2084,12 +2406,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	static_sprintf(szFolderPath, "%s\\usb_driver", tmp);
 	safe_free(tmp);
 
-	// Create the main Window
+	// Create the main Window (kept hidden — the printer wizard is the default UI)
 	if ( (hDlg = CreateDialogA(hInstance, "MAIN_DIALOG", NULL, main_callback)) == NULL ) {
 		MessageBoxA(NULL, "Could not create Window", "DialogBox failure", MB_ICONSTOP);
 	}
-	ShowWindow(hDlg, SW_SHOWNORMAL);
-	UpdateWindow(hDlg);
+	ShowWindow(hDlg, SW_HIDE);
+	hWizardDialog = CreateDialogA(hInstance, "PRINTER_WIZARD", NULL, wizard_callback);
+	if (hWizardDialog == NULL) {
+		ShowWindow(hDlg, SW_SHOWNORMAL);
+	} else {
+		ShowWindow(hWizardDialog, SW_SHOWNORMAL);
+		UpdateWindow(hWizardDialog);
+	}
 
 	// Do our own event processing, in order to process "magic" commands
 	while(GetMessage(&msg, NULL, 0, 0)) {

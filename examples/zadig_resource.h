@@ -73,6 +73,14 @@
 #define IDS_NEW_VERSION_NOTES_GRP       1093
 #define IDS_CHECK_NOW_GRP               1094
 #define IDC_PROGRESS                    1095
+#define IDD_PRINTER_WIZARD              110
+#define IDC_SCAN_STATUS                 1100
+#define IDC_SCAN_PROGRESS               1101
+#define IDC_PRINTER_LIST                1102
+#define IDC_CONFIRM_INSTALL             1103
+#define IDC_SHOW_ADVANCED               1104
+#define IDC_RESCAN                      1105
+#define IDC_PRINTER_HINT                1106
 
 #define IDM_ABOUT                       40001
 #define IDM_UPDATES                     40002
@@ -99,9 +107,9 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        110
+#define _APS_NEXT_RESOURCE_VALUE        111
 #define _APS_NEXT_COMMAND_VALUE         40023
-#define _APS_NEXT_CONTROL_VALUE         1096
+#define _APS_NEXT_CONTROL_VALUE         1107
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

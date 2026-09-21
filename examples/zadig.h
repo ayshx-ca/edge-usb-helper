@@ -92,7 +92,8 @@ enum user_message_type {
 	UM_LOGGER_EVENT,
 	UM_DOWNLOAD_INIT,
 	UM_DOWNLOAD_EXIT,
-	UM_NO_UPDATE
+	UM_NO_UPDATE,
+	UM_SCAN_PRINTERS
 };
 
 // WCID states
@@ -203,6 +204,8 @@ BOOL CheckForUpdates(BOOL force);
 extern HINSTANCE main_instance;
 extern HWND hDeviceList;
 extern HWND hMainDialog;
+extern HWND hWizardDialog;
+HWND ui_parent(void);
 extern HWND hInfo;
 extern HWND hStatus;
 extern WORD application_version[4];

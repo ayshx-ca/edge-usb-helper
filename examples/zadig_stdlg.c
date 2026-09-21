@@ -844,7 +844,7 @@ BOOL notification(int type, const notification_info* more_info, char* title, cha
 		hMessageIcon = LoadIcon(NULL, IDI_INFORMATION);
 		break;
 	}
-	ret = (DialogBox(main_instance, MAKEINTRESOURCE(IDD_NOTIFICATION), hMainDialog, notification_callback) == IDYES);
+	ret = (DialogBox(main_instance, MAKEINTRESOURCE(IDD_NOTIFICATION), ui_parent(), notification_callback) == IDYES);
 	safe_free(szMessageText);
 	dialog_showing--;
 	return ret;
